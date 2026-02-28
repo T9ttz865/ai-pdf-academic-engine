@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI Hub - PDF Academic Engine</title>
+
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+
+
+
+</head>
+
+<body>
+
+<header class="nav">
+    <div class="container nav-inner">
+        <div class="brand">
+            <div class="logo">AI</div>
+            <div>
+                <div class="brand-name">AI Hub</div>
+                <div class="brand-sub">Academic Processing Engine</div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main>
+
+<section class="hero">
+    <div class="container">
+        <h1>تحليل ملفات PDF باستخدام الذكاء الاصطناعي</h1>
+        <p>اختر نوع المعالجة ثم ارفع ملفك وسيتم تحليل المحتوى فورًا.</p>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+
+        <div class="card">
+
+            <form id="pdfForm" enctype="multipart/form-data">
+
+                <input type="file" name="file" required>
+
+                <div class="mode-options">
+
+                    <label>
+                        <input type="radio" name="mode" value="summary" checked>
+                        📝 تلخيص احترافي
+                    </label>
+
+                    <label>
+                        <input type="radio" name="mode" value="points">
+                        📌 استخراج نقاط رئيسية
+                    </label>
+
+                    <label>
+                        <input type="radio" name="mode" value="questions">
+                        ❓ توليد أسئلة اختبار
+                    </label>
+
+                    <label>
+                        <input type="radio" name="mode" value="simple">
+                        🎓 شرح مبسط
+                    </label>
+
+                    <label>
+                        <input type="radio" name="mode" value="translate">
+                        🌍 ترجمة للإنجليزية
+                    </label>
+
+                </div>
+
+                <button type="submit" class="btn primary full">
+                    تحليل الملف
+                </button>
+
+            </form>
+
+            <div id="resultBox" class="result-box"></div>
+
+        </div>
+
+    </div>
+</section>
+
+</main>
+
+<footer class="footer">
+    <div class="container">
+        © AI Hub — AI Academic Processing Platform
+    </div>
+</footer>
+
+<!-- JavaScript -->
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+
+</body>
+</html>
