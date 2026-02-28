@@ -11,7 +11,7 @@ app = Flask(__name__)
 # =========================
 
 HF_TOKEN = os.getenv("HF_TOKEN")
-
+print("HF_TOKEN:", HF_TOKEN)
 API_URL = "https://router.huggingface.co/hf-inference/models/facebook/bart-large-cnn"
 headers = {
     "Authorization": f"Bearer {HF_TOKEN}"
