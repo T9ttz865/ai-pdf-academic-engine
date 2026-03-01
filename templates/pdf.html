@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI PDF Analyzer | AI Hub</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-color: #0b0f19;
+      --text-color: #e2e8f0;
+      --chat-bg: rgba(255, 255, 255, 0.02);
+      --glass-bg: rgba(30, 41, 59, 0.4);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --primary: #8b5cf6;
+      --user-bubble: #6366f1;
+      --ai-bubble: #1e293b;
+      --input-bg: rgba(0, 0, 0, 0.3);
+    }
+
+    [data-theme="light"] {
+      --bg-color: #f1f5f9;
+      --text-color: #0f172a;
+      --chat-bg: rgba(255, 255, 255, 0.5);
+      --glass-bg: rgba(255, 255, 255, 0.7);
+      --glass-border: rgba(0, 0, 0, 0.1);
+      --ai-bubble: #e2e8f0;
+      --input-bg: #ffffff;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Cairo', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      transition: background-color 0.3s;
+    }
+
+    header {
+      padding: 1rem 2rem;
+      border-bottom: 1px solid var(--glass-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--glass-bg);
+      backdrop-filter: blur(10px);
+    }
+
+    .brand {
+      font-weight: 700;
+      font-size: 1.2rem;
+      color: var(--primary);
+    }
+
+    .nav-link {
+      text-decoration: none;
+      color: var(--text-color);
+      opacity: 0.85;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .nav-link:hover { opacity: 1; text-decoration: underline; }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 1rem;
+    }
+
+    .upload-area {
+      border: 2px dashed var(--glass-border);
+      border-radius: 16px;
+      padding: 2rem;
+      text-align: center;
+      margin-bottom: 1.25rem;
+      background: var(--glass-bg);
+      transition: all 0.25s ease;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .upload-area:hover {
+      border-color: var(--primary);
+      background: rgba(139, 92, 246, 0.06);
+    }
+
+    .upload-area.dragover {
+      border-color: var(--primary);
+      background: rgba(139, 92, 246, 0.10);
+      transform: scale(1.01);
+    }
+
+    .upload-area input { display: none; }
+
+    .upload-icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+      display: block;
+    }
+
+    .file-status {
+      margin-top: 0.75rem;
+      font-size: 0.92rem;
+      color: var(--primary);
+      font-weight: 700;
+      display: none;
+    }
+
+    .typing-indicator {
+      font-style: italic;
+      opacity: 0.7;
+      font-size: 0.85rem;
+      display: none;
+      margin: 0.25rem 0 0.75rem 0.25rem;
+    }
+
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      border-radius: 16px;
+      background: var(--chat-bg);
+      border: 1px solid var(--glass-border);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      scroll-behavior: smooth;
+    }
+
+    .message {
+      max-width: 80%;
+      padding: 1rem 1.5rem;
+      border-radius: 18px;
+      line-height: 1.7;
+      font-size: 0.95rem;
+      animation: fadeIn 0.25s ease-out;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: var(--user-bubble);
+      color: white;
+      border-bottom-left-radius: 4px;
+    }
+
+    .message.ai {
+      align-self: flex-start;
+      background: var(--ai-bubble);
+      color: var(--text-color);
+      border: 1px solid var(--glass-border);
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.error {
+      border: 1px solid rgba(255, 0, 0, 0.25);
+      background: rgba(255, 0, 0, 0.08);
+    }
+
+    .input-area {
+      display: flex;
+      gap: 0.5rem;
+      background: var(--glass-bg);
+      padding: 0.5rem;
+      border-radius: 12px;
+      border: 1px solid var(--glass-border);
+    }
+
+    .input-area input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      padding: 0.9rem;
+      color: var(--text-color);
+      font-family: 'Cairo', sans-serif;
+      font-size: 1rem;
+      outline: none;
+    }
+
+    .send-btn,
+    .clear-btn {
+      border: none;
+      color: white;
+      padding: 0 1.2rem;
+      border-radius: 10px;
+      cursor: pointer;
+      font-family: 'Cairo', sans-serif;
+      font-weight: 700;
+      transition: 0.2s;
+      height: 44px;
+    }
+
+    .send-btn { background: var(--primary); }
+    .send-btn:hover { background: #7c3aed; }
+
+    .clear-btn {
+      background: transparent;
+      border: 1px solid var(--glass-border);
+      color: var(--text-color);
+    }
+
+    .clear-btn:hover { background: rgba(255, 255, 255, 0.08); }
+
+    footer {
+      text-align: center;
+      padding: 1rem;
+      font-size: 0.85rem;
+      opacity: 0.6;
+      margin-top: auto;
+      border-top: 1px solid var(--glass-border);
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <a href="{{ url_for('home') }}" class="nav-link">العودة إلى الرئيسية</a>
+    <div class="brand">AI PDF Academic Analyzer</div>
+    <div style="width: 120px;"></div>
+  </header>
+
+  <main>
+    <!-- Upload -->
+    <div class="upload-area" id="dropZone">
+      <span class="upload-icon">📄</span>
+      <h3>اسحب ملف PDF هنا أو اضغط للرفع</h3>
+      <p style="font-size: 0.9rem; opacity: 0.65; margin-top: 0.5rem;">يدعم الملفات حتى 1000 ميجابايت</p>
+      <input type="file" id="fileInput" accept=".pdf" />
+      <div class="file-status" id="fileStatus"></div>
+    </div>
+
+    <div class="typing-indicator" id="typingIndicator">جاري تحليل المستند والتفكير...</div>
+
+    <!-- Chat -->
+    <div class="chat-container" id="chatContainer">
+      <div class="message ai">
+        مرحباً! ارفع ملف PDF أولاً، ثم اسألني عنه أو اطلب تلخيصه.
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="input-area">
+      <input type="text" id="userInput" placeholder="اطرح سؤالاً حول الملف..." />
+      <button class="clear-btn" id="clearBtn" title="مسح المحادثة">🗑️</button>
+      <button class="send-btn" id="sendBtn">إرسال</button>
+    </div>
+  </main>
+
+  <footer>
+    Eng: Badraldeen Mortatha Mohialdeen | AI Systems Developer
+  </footer>
+
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const fileStatus = document.getElementById('fileStatus');
+    const chatContainer = document.getElementById('chatContainer');
+    const userInput = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const typingIndicator = document.getElementById('typingIndicator');
+
+    // Will hold PDF summary/context returned from server
+    let pdfContext = "";
+    let pdfReady = false;
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>"']/g, (m) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[m]));
+    }
+
+    function addUserMessage(text) {
+      const div = document.createElement('div');
+      div.className = 'message user';
+      div.innerHTML = escapeHTML(text);
+      chatContainer.appendChild(div);
+      scrollToBottom();
+    }
+
+    function addAiMessage(text, extraClass = "") {
+      const div = document.createElement('div');
+      div.className = `message ai ${extraClass}`.trim();
+      div.innerHTML = escapeHTML(text);
+      chatContainer.appendChild(div);
+      scrollToBottom();
+      return div;
+    }
+
+    function addErrorMessage(text) {
+      const div = document.createElement('div');
+      div.className = 'message ai error';
+      div.innerHTML = escapeHTML(text);
+      chatContainer.appendChild(div);
+      scrollToBottom();
+    }
+
+    function scrollToBottom() {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function setLoading(isLoading) {
+      typingIndicator.style.display = isLoading ? 'block' : 'none';
+      scrollToBottom();
+    }
+
+    // =========================
+    // Upload: Click + DragDrop
+    // =========================
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        fileInput.files = e.dataTransfer.files;
+        handleFileSelected();
+      }
+    });
+
+    fileInput.addEventListener('change', handleFileSelected);
+
+    async function handleFileSelected() {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+
+      // Validate type
+      if (!file.name.toLowerCase().endsWith(".pdf")) {
+        addErrorMessage("⚠ الرجاء اختيار ملف PDF فقط.");
+        return;
+      }
+
+      // Validate size (10MB)
+      const maxBytes = 10 * 1024 * 1024;
+      if (file.size > maxBytes) {
+        addErrorMessage("⚠ حجم الملف كبير. الحد الأقصى 1000 ميجابايت.");
+        return;
+      }
+
+      fileStatus.textContent = `تم تحميل الملف: ${file.name}`;
+      fileStatus.style.display = 'block';
+
+      addAiMessage("تم استلام الملف. سأقوم الآن بتحليل المحتوى...");
+
+      setLoading(true);
+
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const response = await fetch("/analyze_pdf", {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await response.json();
+        setLoading(false);
+
+        if (!response.ok) {
+          addErrorMessage(`⚠ ${data.error || "حدث خطأ أثناء تحليل الملف."}`);
+          pdfContext = "";
+          pdfReady = false;
+          return;
+        }
+
+        // Save context for later Q/A
+        pdfContext = data.reply || "";
+        pdfReady = true;
+
+        addAiMessage("✅ تم تحليل الملف بنجاح. يمكنك الآن طرح الأسئلة حوله.");
+        if (pdfContext.trim()) {
+          addAiMessage("📌 ملخص/نقاط من الملف:\n" + pdfContext);
+        }
+
+      } catch (err) {
+        setLoading(false);
+        addErrorMessage("⚠ خطأ اتصال أثناء رفع/تحليل الملف.");
+        pdfContext = "";
+        pdfReady = false;
+      }
+    }
+
+    // =========================
+    // Chat with PDF context
+    // =========================
+    async function handleSend() {
+      const question = userInput.value.trim();
+      if (!question) return;
+
+      addUserMessage(question);
+      userInput.value = "";
+
+      if (!pdfReady) {
+        addAiMessage("⚠ قبل الأسئلة، ارفع ملف PDF أولاً لكي أستطيع الإجابة عنه.", "error");
+        return;
+      }
+
+      setLoading(true);
+      const loadingMsg = addAiMessage("⏳ Processing...");
+
+      try {
+        // Build a prompt that includes PDF context
+        const prompt =
+          "أنت AI Hub. سأعطيك ملخصًا/مقتطفًا من PDF ثم سؤال المستخدم.\n\n" +
+          "ملخص/سياق PDF:\n" + pdfContext + "\n\n" +
+          "سؤال المستخدم:\n" + question + "\n\n" +
+          "أجب بدقة وبشكل منظم، وإذا لم يكن الجواب موجودًا في السياق قل ذلك بوضوح.";
+
+        const response = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: prompt,
+            mode: "pdf"
+          })
+        });
+
+        const data = await response.json();
+        setLoading(false);
+        loadingMsg.remove();
+
+        if (!response.ok) {
+          addErrorMessage(`⚠ ${data.error || "Server error"}`);
+          return;
+        }
+
+        addAiMessage(data.reply || "لم يصل رد من الخادم.");
+
+      } catch (err) {
+        setLoading(false);
+        loadingMsg.remove();
+        addErrorMessage("⚠ Connection error");
+      }
+    }
+
+    sendBtn.addEventListener('click', handleSend);
+    userInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') handleSend();
+    });
+
+    clearBtn.addEventListener('click', () => {
+      chatContainer.innerHTML = '<div class="message ai">تم مسح المحادثة. ارفع ملف PDF ثم اسألني عنه.</div>';
+    });
+  </script>
+</body>
+
+</html>

@@ -1,160 +1,167 @@
 from flask import Flask, render_template, request, jsonify
-import PyPDF2
-import requests
-import re
-import os
+from PyPDF2 import PdfReader
+
+# New SDK (replacement for deprecated google.generativeai)
+from google import genai
 
 app = Flask(__name__)
 
-# =========================
-# HuggingFace API
-# =========================
+# ===============================
+# Gemini / GenAI Client
+# ===============================
+API_KEY = "AIzaSyAyeY1YEwvjmzhaqBtPpN00cjZeBVYtuFI"
+MODEL_NAME = "gemini-2.5-flash"  # stable/current in docs
 
-HF_TOKEN = os.getenv("HF_TOKEN")
-print("HF_TOKEN:", HF_TOKEN)
-API_URL = "https://router.huggingface.co/hf-inference/models/facebook/bart-large-cnn"
-headers = {
-    "Authorization": f"Bearer {HF_TOKEN}"
-}
+client = genai.Client(api_key=API_KEY)
 
-# =========================
-# تنظيف النص
-# =========================
+# ===============================
+# Simple in-memory storage for last uploaded PDF text
+# (OK for local/dev single-user. For production use DB/session storage.)
+# ===============================
+LAST_PDF_TEXT = ""
 
-def clean_text(text):
-    text = re.sub(r'\s+', ' ', text)
-    return text.strip()
 
-# =========================
-# تقسيم ذكي
-# =========================
-
-def chunk_text(text, chunk_size=1200):
-    chunks = []
-    start = 0
-
-    while start < len(text):
-        end = start + chunk_size
-        chunks.append(text[start:end])
-        start = end
-
-    return chunks
-
-# =========================
-# بناء البرومبت حسب الاختيار
-# =========================
-
-def build_prompt(text, mode):
-
-    if mode == "summary":
-        return f"""
-Summarize the following academic text professionally.
-Start with a definition, explain importance, mention implications.
-Avoid repetition.
-
-Text:
-{text}
-"""
-
-    elif mode == "points":
-        return f"""
-Extract clear structured bullet points from the following academic text:
-
-{text}
-"""
-
-    elif mode == "questions":
-        return f"""
-Generate 10 clear academic exam-style questions based on this content:
-
-{text}
-"""
-
-    elif mode == "simple":
-        return f"""
-Explain this academic text in simple language for students:
-
-{text}
-"""
-
-    elif mode == "translate":
-        return f"""
-Translate the following text to English professionally:
-
-{text}
-"""
-
-    return text
-
-# =========================
-# الصفحة الرئيسية
-# =========================
-
+# ===============================
+# Pages
+# ===============================
 @app.route("/")
 def home():
     return render_template("index.html")
 
-# =========================
-# التحليل
-# =========================
 
-@app.route("/analyze", methods=["POST"])
-def analyze():
+@app.route("/pdf")
+def pdf_page():
+    return render_template("pdf.html")
 
-    if "file" not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
 
-    file = request.files["file"]
-    mode = request.form.get("mode", "summary")
+@app.route("/text")
+def text_page():
+    return render_template("text.html")
+
+
+@app.route("/about")
+def about_page():
+    return render_template("about.html")
+
+
+# ===============================
+# Helpers
+# ===============================
+def build_system_prompt() -> str:
+    return (
+        "You are Badr Ai — created by ENG: Badraldeen Mortatha .\n"
+        "You are an academic AI assistant specialized in:\n"
+        "- PDF summarization\n"
+        "- Academic explanations\n"
+        "- Generating questions\n"
+        "- Extracting key points\n"
+        "- Translation\n"
+        "If user asks unrelated things, redirect them to academic assistance.\n"
+        "Never say you are Gemini or Google AI.\n"
+        "Always say you are Badr Ai.\n"
+    )
+
+
+def gen_text(prompt: str) -> str:
+    # Centralized generation call
+    resp = client.models.generate_content(
+        model=MODEL_NAME,
+        contents=prompt
+    )
+    # resp.text is the simplest accessor
+    return (resp.text or "").strip()
+
+
+# ===============================
+# Chat API (Text + PDF Q&A)
+# ===============================
+@app.route("/chat", methods=["POST"])
+def chat():
+    global LAST_PDF_TEXT
 
     try:
-        reader = PyPDF2.PdfReader(file)
-        text = ""
+        data = request.get_json(silent=True) or {}
+        user_message = (data.get("message") or "").strip()
+        mode = (data.get("mode") or "text").strip().lower()  # "text" or "pdf"
 
-        for page in reader.pages:
-            extracted = page.extract_text()
-            if extracted:
-                text += extracted
+        if not user_message:
+            return jsonify({"error": "No message provided"}), 400
 
-        if not text.strip():
-            return jsonify({"error": "No readable text in PDF"}), 400
+        system_prompt = build_system_prompt()
+
+        if mode == "pdf":
+            if not LAST_PDF_TEXT.strip():
+                return jsonify({"error": "No PDF uploaded yet. Please upload a PDF first."}), 400
+
+            prompt = (
+                f"{system_prompt}\n"
+                "You have the following PDF content extracted as text. Answer the user's question ONLY using this content.\n"
+                "If the answer is not in the content, say you cannot find it in the document.\n\n"
+                f"PDF Content:\n{LAST_PDF_TEXT}\n\n"
+                f"User Question:\n{user_message}\n"
+            )
+        else:
+            prompt = f"{system_prompt}\nUser:\n{user_message}\n"
+
+        reply = gen_text(prompt)
+        if not reply:
+            reply = "I couldn't generate a response. Please try again."
+
+        return jsonify({"reply": reply})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    text = clean_text(text)
-    chunks = chunk_text(text)
 
-    all_results = []
+# ===============================
+# PDF Upload + Analyze
+# ===============================
+@app.route("/analyze_pdf", methods=["POST"])
+def analyze_pdf():
+    global LAST_PDF_TEXT
 
-    for chunk in chunks:
+    try:
+        file = request.files.get("file")
+        if not file:
+            return jsonify({"error": "No file uploaded"}), 400
 
-        prompt = build_prompt(chunk, mode)
+        reader = PdfReader(file)
+        text_parts = []
+        for page in reader.pages:
+            page_text = page.extract_text() or ""
+            if page_text.strip():
+                text_parts.append(page_text)
 
-        payload = {
-            "inputs": prompt,
-            "parameters": {
-                "max_new_tokens": 250,
-                "temperature": 0.7
-            }
-        }
+        full_text = "\n\n".join(text_parts).strip()
+        if not full_text:
+            return jsonify({"error": "Could not extract text from this PDF (maybe scanned images)."}), 400
 
-        response = requests.post(API_URL, headers=headers, json=payload)
+        # Store for later Q&A in /chat mode="pdf"
+        # Keep it limited to avoid huge prompts (you can increase if needed).
+        LAST_PDF_TEXT = full_text[:12000]
 
-        if response.status_code != 200:
-            return jsonify({"error": response.text}), 500
+        prompt = (
+            f"{build_system_prompt()}\n"
+            "Analyze the following academic PDF content and return:\n"
+            "1) Summary in clear bullet points\n"
+            "2) Key concepts\n"
+            "3) 5–10 possible exam questions\n"
+            "4) Short academic explanation\n\n"
+            f"Content:\n{LAST_PDF_TEXT}\n"
+        )
 
-        result = response.json()
+        reply = gen_text(prompt)
+        if not reply:
+            reply = "I extracted the PDF text, but couldn't generate the analysis. Try again."
 
-        if isinstance(result, list):
-            all_results.append(result[0]["generated_text"])
-        else:
-            all_results.append(str(result))
+        return jsonify({"reply": reply})
 
-    final_result = "\n\n".join(all_results)
-
-    return jsonify({"result": final_result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
+# ===============================
+# Run Server
+# ===============================
 if __name__ == "__main__":
     app.run()
